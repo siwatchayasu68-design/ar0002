@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mini Farm Island 3D - Modern Edition</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Tone.js for Audio Synthesis -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <!-- Canvas Confetti for Level-Up Visuals -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Kanit:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Kanit', 'Fredoka', sans-serif;
+            user-select: none;
+            overflow: hidden;
+            touch-action: manipulation;
+            background-color: #0f172a;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-bounce {
+            transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
+        }
+
+        .btn-bounce:active {
+            transform: scale(0.90);
+        }
+
+        /* Floating Text Particle FX */
+        .float-text {
+            position: absolute;
+            pointer-events: none;
+            font-weight: 800;
+            text-shadow: 0px 3px 6px rgba(0,0,0,0.6);
+            animation: floatAndFade 1.3s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+            z-index: 100;
+        }
+
+        @keyframes floatAndFade {
+            0% { opacity: 0; transform: translateY(10px) scale(0.7); }
+            20% { opacity: 1; transform: translateY(-15px) scale(1.25); }
+            80% { opacity: 1; transform: translateY(-45px) scale(1); }
+            100% { opacity: 0; transform: translateY(-65px) scale(0.8); }
+        }
+
+        /* Custom Scrollbar for Inventory */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+        }
+
+        /* Pulse glow for ready crops or orders */
+        .pulse-glow {
+            animation: pulseGlow 2s infinite;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+            50% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden text-slate-800">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full bg-slate-900"></div>
+
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-3 sm:p-5 z-10">
+        
+        <!-- Top Navigation Header -->
+        <div class="flex justify-between items-start w-full gap-2">
+            
+            <!-- Left: Player Stats Dashboard -->
+            <div class="pointer-events-auto glass-panel rounded-2xl p-2.5 sm:p-3 flex items-center gap-3 sm:gap-4">
+                <!-- Coins -->
+                <div class="flex items-center gap-2">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-400 border-2 border-white flex items-center justify-center text-xl shadow-md">
+                        🪙
+                    </div>
+                    <div>
+                        <div class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">เหรียญทอง</div>
+                        <div id="coin-count" class="text-base sm:text-lg font-extrabold text-amber-600 leading-tight">200</div>
+                    </div>
+                </div>
+
+                <div class="h-8 w-0.5 bg-slate-300/60"></div>
+
+                <!-- Level & EXP -->
+                <div class="flex items-center gap-2">
+                    <div class="w-10 h-10 rounded-2xl bg-emerald-500 border-2 border-white flex items-center justify-center text-xl shadow-md text-white font-black">
+                        ⭐
+                    </div>
+                    <div>
+                        <div class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">
+                            เลเวล <span id="level-num" class="text-emerald-600 font-black">1</span>
+                        </div>
+                        <div class="w-20 sm:w-28 bg-slate-200 h-2.5 rounded-full overflow-hidden mt-1 border border-slate-300/80">
+                            <div id="exp-bar" class="bg-gradient-to-r from-emerald-400 to-teal-500 h-full transition-all duration-300" style="width: 20%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Action Menu Buttons -->
+            <div class="pointer-events-auto flex items-center gap-2">
+                <!-- Day / Night Atmosphere Switcher -->
+                <button id="btn-time" title="เปลี่ยนเวลา/บรรยากาศ" class="glass-panel w-11 h-11 rounded-2xl flex items-center justify-center text-xl btn-bounce hover:bg-amber-50">
+                    ☀️
+                </button>
+
+                <!-- Barn / Inventory Drawer -->
+                <button id="btn-barn" title="คลังสินค้า" class="glass-panel w-11 h-11 rounded-2xl flex items-center justify-center text-xl btn-bounce hover:bg-amber-50 relative">
+                    🧺
+                    <span id="barn-badge" class="absolute -top-1 -right-1 bg-amber-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">0</span>
+                </button>
+
+                <!-- Kitchen Crafting Station -->
+                <button id="btn-kitchen" title="โรงครัวประกอบอาหาร" class="glass-panel w-11 h-11 rounded-2xl flex items-center justify-center text-xl btn-bounce hover:bg-amber-50">
+                    🍳
+                </button>
+
+                <!-- Audio Toggle -->
+                <button id="btn-audio" title="เปิด/ปิดเสียง" class="glass-panel w-11 h-11 rounded-2xl flex items-center justify-center text-xl btn-bounce hover:bg-amber-50">
+                    🔊
+                </button>
+
+                <!-- Order Board -->
+                <button id="btn-orders" class="glass-panel px-3.5 sm:px-4 h-11 rounded-2xl flex items-center gap-2 font-extrabold text-indigo-700 bg-indigo-50/90 border-indigo-200 btn-bounce pulse-glow">
+                    🚚 <span class="hidden sm:inline">ส่งออเดอร์</span> 
+                    <span id="order-badge" class="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">3</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Bottom Action & Tool Selection Dock -->
+        <div class="w-full flex flex-col items-center gap-2 mb-1">
+            <!-- Active Selected Tool Badge -->
+            <div id="tool-indicator" class="pointer-events-auto glass-panel px-4 py-1 rounded-full text-xs sm:text-sm font-bold text-slate-700 flex items-center gap-2 shadow-sm">
+                <span class="text-slate-400">เครื่องมือปัจจุบัน:</span> 
+                <span id="current-tool-text" class="text-emerald-600 font-extrabold">แครอท 🥕</span>
+            </div>
+
+            <!-- Scrollable Tools Grid Bar -->
+            <div class="pointer-events-auto glass-panel rounded-3xl p-2 shadow-2xl flex items-center gap-1.5 sm:gap-2 overflow-x-auto max-w-full">
+                <!-- Water Can -->
+                <button data-tool="water" class="tool-btn bg-slate-100 border-2 border-transparent p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">💦</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">รดน้ำ</span>
+                </button>
+
+                <div class="h-8 w-0.5 bg-slate-300/60 mx-0.5"></div>
+
+                <!-- Seeds -->
+                <button data-tool="carrot" class="tool-btn bg-amber-100 border-2 border-amber-400 p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">🥕</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">แครอท</span>
+                </button>
+                <button data-tool="tomato" class="tool-btn bg-slate-100 border-2 border-transparent p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">🍅</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">มะเขือเทศ</span>
+                </button>
+                <button data-tool="corn" class="tool-btn bg-slate-100 border-2 border-transparent p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">🌽</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">ข้าวโพด</span>
+                </button>
+                <button data-tool="wheat" class="tool-btn bg-slate-100 border-2 border-transparent p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">🌾</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">ข้าวสาลี</span>
+                </button>
+                <button data-tool="strawberry" class="tool-btn bg-slate-100 border-2 border-transparent p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">🍓</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">สตรอว์เบอร์รี</span>
+                </button>
+                <button data-tool="pumpkin" class="tool-btn bg-slate-100 border-2 border-transparent p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">🎃</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">ฟักทอง</span>
+                </button>
+
+                <div class="h-8 w-0.5 bg-slate-300/60 mx-0.5"></div>
+
+                <!-- Animal Care -->
+                <button data-tool="feed" class="tool-btn bg-slate-100 border-2 border-transparent p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">🌾</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">ให้อาหาร</span>
+                </button>
+                <button data-tool="pet" class="tool-btn bg-slate-100 border-2 border-transparent p-2 rounded-2xl flex flex-col items-center min-w-[58px] sm:min-w-[64px] btn-bounce">
+                    <span class="text-2xl">✋</span>
+                    <span class="text-[10px] sm:text-[11px] font-extrabold mt-0.5">ลูบหัว</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 1: Order Board -->
+    <div id="order-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl relative border-4 border-amber-300/80">
+            <button id="close-orders" class="absolute top-4 right-4 w-9 h-9 bg-slate-200 hover:bg-slate-300 rounded-full font-bold text-slate-600 flex items-center justify-center btn-bounce">✕</button>
+            
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-4xl">🚚</span>
+                <div>
+                    <h2 class="text-xl font-black text-slate-800">กระดานคำสั่งซื้อฟาร์มสด</h2>
+                    <p class="text-xs text-slate-500">ส่งมอบวัตถุดิบและอาหารแปรรูปเพื่อรับเหรียญรางวัลและ EXP</p>
+                </div>
+            </div>
+
+            <div id="order-list" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                <!-- Injected via JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Barn Inventory -->
+    <div id="barn-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl relative border-4 border-amber-400/80">
+            <button id="close-barn" class="absolute top-4 right-4 w-9 h-9 bg-slate-200 hover:bg-slate-300 rounded-full font-bold text-slate-600 flex items-center justify-center btn-bounce">✕</button>
+            
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-4xl">🧺</span>
+                <div>
+                    <h2 class="text-xl font-black text-slate-800">คลังเก็บผลผลิตฟาร์ม</h2>
+                    <p class="text-xs text-slate-500">ตรวจสอบไอเทมทั้งหมดและขายเพื่อรับเหรียญทันที</p>
+                </div>
+            </div>
+
+            <div id="barn-items-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-1">
+                <!-- Injected via JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Kitchen Crafting -->
+    <div id="kitchen-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl relative border-4 border-orange-400/80">
+            <button id="close-kitchen" class="absolute top-4 right-4 w-9 h-9 bg-slate-200 hover:bg-slate-300 rounded-full font-bold text-slate-600 flex items-center justify-center btn-bounce">✕</button>
+            
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-4xl">🍳</span>
+                <div>
+                    <h2 class="text-xl font-black text-slate-800">โรงครัวประกอบอาหาร</h2>
+                    <p class="text-xs text-slate-500">สร้างเมนูแปรรูปเพิ่มมูลค่าจากวัตถุดิบสดในฟาร์ม</p>
+                </div>
+            </div>
+
+            <div id="recipe-list" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                <!-- Injected via JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            coins: 200,
+            level: 1,
+            exp: 30,
+            maxExp: 100,
+            currentTool: 'carrot', // water, carrot, tomato, corn, wheat, strawberry, pumpkin, feed, pet
+            audioMuted: false,
+            timeOfDay: 'day', // day, sunset, night
+            inventory: {
+                carrot: 5,
+                tomato: 3,
+                corn: 2,
+                wheat: 8,
+                strawberry: 2,
+                pumpkin: 1,
+                egg: 3,
+                milk: 2,
+                wool: 1,
+                bread: 1,
+                milkshake: 0,
+                soup: 0
+            },
+            orders: [
+                { id: 101, items: { carrot: 3, egg: 2 }, rewardCoins: 120, rewardExp: 45 },
+                { id: 102, items: { milk: 2, bread: 1 }, rewardCoins: 220, rewardExp: 75 },
+                { id: 103, items: { strawberry: 3, milkshake: 1 }, rewardCoins: 350, rewardExp: 110 }
+            ]
+        };
+
+        // Item Metadata Table
+        const ITEMS = {
+            carrot: { name: 'แครอท', icon: '🥕', price: 12 },
+            tomato: { name: 'มะเขือเทศ', icon: '🍅', price: 18 },
+            corn: { name: 'ข้าวโพด', icon: '🌽', price: 22 },
+            wheat: { name: 'ข้าวสาลี', icon: '🌾', price: 10 },
+            strawberry: { name: 'สตรอว์เบอร์รี', icon: '🍓', price: 30 },
+            pumpkin: { name: 'ฟักทอง', icon: '🎃', price: 40 },
+            egg: { name: 'ไข่สด', icon: '🥚', price: 25 },
+            milk: { name: 'นมวัวสด', icon: '🥛', price: 35 },
+            wool: { name: 'ขนแกะนุ่ม', icon: '🧶', price: 45 },
+            bread: { name: 'ขนมปังอบสด', icon: '🍞', price: 70 },
+            milkshake: { name: 'สตรอว์เบอร์รีมิลค์เชค', icon: '🥤', price: 120 },
+            soup: { name: 'ซุปมะเขือเทศ', icon: '🥣', price: 95 }
+        };
+
+        // Recipes for Kitchen
+        const RECIPES = [
+            { id: 'bread', name: 'ขนมปังอบสด 🍞', ingredients: { wheat: 3 }, output: 'bread', count: 1, xp: 25 },
+            { id: 'milkshake', name: 'สตรอว์เบอร์รีมิลค์เชค 🥤', ingredients: { strawberry: 2, milk: 1 }, output: 'milkshake', count: 1, xp: 45 },
+            { id: 'soup', name: 'ซุปมะเขือเทศเข้มข้น 🥣', ingredients: { tomato: 3, milk: 1 }, output: 'soup', count: 1, xp: 40 }
+        ];
+
+        let scene, camera, renderer, controls;
+        let raycaster, mouse, clock;
+
+        // Scene Object References
+        let islandGroup, windmillBlades, dogMesh, duckMesh;
+        let chickenMeshes = [], cowMeshes = [], sheepMeshes = [];
+        let plotMeshes = [];
+        let lanternLights = [];
+        let firefliesSystem;
+
+        // Lighting References
+        let sunLight, ambientLight, skyBgColor;
+
+        // Tone.js Audio Synths
+        let synth, polySynth, melodySynth;
+
+        function initAudio() {
+            try {
+                synth = new Tone.Synth({ oscillator: { type: 'sine' } }).toDestination();
+                polySynth = new Tone.PolySynth(Tone.Synth).toDestination();
+                melodySynth = new Tone.Synth({ oscillator: { type: 'triangle' } }).toDestination();
+                
+                synth.volume.value = -10;
+                polySynth.volume.value = -12;
+                melodySynth.volume.value = -14;
+            } catch (e) {
+                console.log("Audio waiting for user gesture.");
+            }
+        }
+
+        function playSound(type) {
+            if (state.audioMuted || !synth) return;
+            try {
+                Tone.start();
+                if (type === 'plant') synth.triggerAttackRelease("C5", "8n");
+                else if (type === 'water') synth.triggerAttackRelease("E5", "8n");
+                else if (type === 'harvest') polySynth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "8n");
+                else if (type === 'coin') polySynth.triggerAttackRelease(["E6", "B6"], "16n");
+                else if (type === 'animal') synth.triggerAttackRelease("A4", "8n");
+                else if (type === 'dog') polySynth.triggerAttackRelease(["G5", "C6"], "16n");
+                else if (type === 'cook') polySynth.triggerAttackRelease(["G4", "C5", "E5"], "8n");
+            } catch (e) {}
+        }
+
+        function initEngine() {
+            clock = new THREE.Clock();
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            const container = document.getElementById('canvas-container');
+
+            // Scene & Fog
+            scene = new THREE.Scene();
+            skyBgColor = new THREE.Color(0x7dd3fc);
+            scene.background = skyBgColor;
+            scene.fog = new THREE.FogExp2(0x7dd3fc, 0.012);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 26, 36);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(renderer.domElement);
+
+            // Orbit Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05;
+            controls.minDistance = 12;
+            controls.maxDistance = 65;
+            controls.target.set(0, 1, 0);
+
+            // Ambient & Sun Lights
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+            scene.add(ambientLight);
+
+            sunLight = new THREE.DirectionalLight(0xfff5ea, 1.1);
+            sunLight.position.set(24, 38, 18);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 110;
+            const d = 28;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            buildProceduralWorld();
+            setupFireflies();
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('pointerdown', onPointerDown);
+        }
+
+        function buildProceduralWorld() {
+            islandGroup = new THREE.Group();
+
+            // 1. Multi-tiered Stylized Island
+            const topGrassGeo = new THREE.CylinderGeometry(15, 14.5, 2, 32);
+            const grassMat = new THREE.MeshLambertMaterial({ color: 0x86efac });
+            const topGrass = new THREE.Mesh(topGrassGeo, grassMat);
+            topGrass.position.y = -1;
+            topGrass.receiveShadow = true;
+            islandGroup.add(topGrass);
+
+            const cliffGeo = new THREE.CylinderGeometry(14.5, 9, 6, 32);
+            const cliffMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+            const cliff = new THREE.Mesh(cliffGeo, cliffMat);
+            cliff.position.y = -5;
+            islandGroup.add(cliff);
+
+            // Ocean Water Bed with Transparency
+            const oceanGeo = new THREE.PlaneGeometry(350, 350);
+            const oceanMat = new THREE.MeshPhongMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.82,
+                shininess: 90
+            });
+            const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+            ocean.rotation.x = -Math.PI / 2;
+            ocean.position.y = -7.5;
+            scene.add(ocean);
+
+            // 2. Windmill
+            buildWindmill(islandGroup);
+
+            // 3. Cozy Farm House & Kitchen Workshop
+            buildFarmHouse(islandGroup);
+
+            // 4. Duck Pond
+            buildDuckPond(islandGroup);
+
+            // 5. Animal Pen & Livestock
+            buildAnimalPen(islandGroup);
+
+            // 6. Crop Plot Grid (3x3 = 9 Plots)
+            buildCropPlots(islandGroup);
+
+            // 7. Decorative Trees, Lanterns & Fences
+            buildDecorations(islandGroup);
+
+            scene.add(islandGroup);
+        }
+
+        function buildWindmill(parent) {
+            const group = new THREE.Group();
+            group.position.set(-9, 0, -6.5);
+
+            const tower = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.1, 1.7, 7, 10),
+                new THREE.MeshLambertMaterial({ color: 0xfef08a })
+            );
+            tower.position.y = 3.5;
+            tower.castShadow = true;
+            group.add(tower);
+
+            const roof = new THREE.Mesh(
+                new THREE.ConeGeometry(1.9, 2.2, 10),
+                new THREE.MeshLambertMaterial({ color: 0xef4444 })
+            );
+            roof.position.y = 8;
+            group.add(roof);
+
+            // Spinning Blades
+            windmillBlades = new THREE.Group();
+            windmillBlades.position.set(0, 6.8, 1.25);
+
+            for (let i = 0; i < 4; i++) {
+                const blade = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.35, 4, 0.06),
+                    new THREE.MeshLambertMaterial({ color: 0xa16207 })
+                );
+                blade.position.y = 2;
+                const pivot = new THREE.Group();
+                pivot.rotation.z = (Math.PI / 2) * i;
+                pivot.add(blade);
+                windmillBlades.add(pivot);
+            }
+            group.add(windmillBlades);
+            parent.add(group);
+        }
+
+        function buildFarmHouse(parent) {
+            const house = new THREE.Group();
+            house.position.set(8, 0, -6.5);
+
+            // Main Body
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(4.5, 3.2, 4.5),
+                new THREE.MeshLambertMaterial({ color: 0xffedd5 })
+            );
+            body.position.y = 1.6;
+            body.castShadow = true;
+            house.add(body);
+
+            // Roof
+            const roof = new THREE.Mesh(
+                new THREE.ConeGeometry(3.8, 2.8, 4),
+                new THREE.MeshLambertMaterial({ color: 0xe11d48 })
+            );
+            roof.position.y = 4.5;
+            roof.rotation.y = Math.PI / 4;
+            house.add(roof);
+
+            // Kitchen Crafting Signboard
+            const kitchenSign = new THREE.Mesh(
+                new THREE.BoxGeometry(1.4, 0.8, 0.2),
+                new THREE.MeshLambertMaterial({ color: 0x854d0e })
+            );
+            kitchenSign.position.set(0, 2.2, 2.35);
+            house.add(kitchenSign);
+
+            parent.add(house);
+        }
+
+        function buildDuckPond(parent) {
+            const pondGroup = new THREE.Group();
+            pondGroup.position.set(8.5, 0.02, 3.5);
+
+            // Water surface
+            const pondWater = new THREE.Mesh(
+                new THREE.CylinderGeometry(2.2, 2.2, 0.1, 16),
+                new THREE.MeshPhongMaterial({ color: 0x0284c7, transparent: true, opacity: 0.9 })
+            );
+            pondGroup.add(pondWater);
+
+            // Duck
+            duckMesh = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.7), new THREE.MeshLambertMaterial({ color: 0xfacc15 }));
+            body.position.y = 0.25;
+            duckMesh.add(body);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), new THREE.MeshLambertMaterial({ color: 0x15803d }));
+            head.position.set(0, 0.5, 0.25);
+            duckMesh.add(head);
+
+            duckMesh.position.set(0, 0.1, 0);
+            pondGroup.add(duckMesh);
+
+            parent.add(pondGroup);
+        }
+
+        function buildAnimalPen(parent) {
+            const penGroup = new THREE.Group();
+            penGroup.position.set(-7, 0, 4);
+
+            // Fence Posts
+            const fenceMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+            for (let x = -3.5; x <= 3.5; x += 2.3) {
+                const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.2), fenceMat);
+                post.position.set(x, 0.6, -3);
+                penGroup.add(post);
+            }
+
+            // Cow
+            const cow = createCow();
+            cow.position.set(-2, 0, -0.5);
+            penGroup.add(cow);
+            cowMeshes.push(cow);
+
+            // Chicken
+            const chicken = createChicken();
+            chicken.position.set(1.2, 0, -1.2);
+            penGroup.add(chicken);
+            chickenMeshes.push(chicken);
+
+            // Sheep
+            const sheep = createSheep();
+            sheep.position.set(2, 0, 1.2);
+            penGroup.add(sheep);
+            sheepMeshes.push(sheep);
+
+            // Shiba / Golden Dog Pet
+            dogMesh = createDog();
+            dogMesh.position.set(3.5, 0, -1);
+            parent.add(dogMesh);
+
+            parent.add(penGroup);
+        }
+
+        function createCow() {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 2.4), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+            body.position.y = 1.1;
+            body.castShadow = true;
+            group.add(body);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.85, 0.95), new THREE.MeshLambertMaterial({ color: 0x1e293b }));
+            head.position.set(0, 1.6, 1.2);
+            group.add(head);
+
+            group.userData = { type: 'cow' };
+            return group;
+        }
+
+        function createChicken() {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.65, 0.75), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+            body.position.y = 0.5;
+            body.castShadow = true;
+            group.add(body);
+
+            const comb = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.25, 0.35), new THREE.MeshLambertMaterial({ color: 0xd97706 }));
+            comb.position.set(0, 0.95, 0.1);
+            group.add(comb);
+
+            group.userData = { type: 'chicken' };
+            return group;
+        }
+
+        function createSheep() {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.SphereGeometry(0.95, 10, 10), new THREE.MeshLambertMaterial({ color: 0xf8fafc }));
+            body.position.y = 1;
+            body.castShadow = true;
+            group.add(body);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.7), new THREE.MeshLambertMaterial({ color: 0x334155 }));
+            head.position.set(0, 1.2, 0.85);
+            group.add(head);
+
+            group.userData = { type: 'sheep' };
+            return group;
+        }
+
+        function createDog() {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 1.4), new THREE.MeshLambertMaterial({ color: 0xf59e0b }));
+            body.position.y = 0.7;
+            body.castShadow = true;
+            group.add(body);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.75), new THREE.MeshLambertMaterial({ color: 0xd97706 }));
+            head.position.set(0, 1.25, 0.65);
+            group.add(head);
+
+            group.userData = { type: 'dog' };
+            return group;
+        }
+
+        function buildCropPlots(parent) {
+            const plotMat = new THREE.MeshLambertMaterial({ color: 0x582f0e });
+
+            let id = 0;
+            // 3x3 Grid
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const plot = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.2, 2.3), plotMat);
+                    
+                    const x = -2.8 + col * 2.8;
+                    const z = -1.5 + row * 2.8;
+                    plot.position.set(x, 0.1, z);
+                    plot.receiveShadow = true;
+
+                    const cropHolder = new THREE.Group();
+                    plot.add(cropHolder);
+
+                    plot.userData = {
+                        id: id++,
+                        state: 'empty', // empty, growing, ready
+                        cropType: null,
+                        growth: 0,
+                        isWatered: false,
+                        cropHolder: cropHolder
+                    };
+
+                    plotMeshes.push(plot);
+                    parent.add(plot);
+                }
+            }
+        }
+
+        function buildDecorations(parent) {
+            // Lantern Light Posts (For Night Mode)
+            const lanternPositions = [
+                { x: 0, z: -7 },
+                { x: -5, z: 0 },
+                { x: 5, z: 0 }
+            ];
+
+            lanternPositions.forEach(pos => {
+                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3), new THREE.MeshLambertMaterial({ color: 0x334155 }));
+                post.position.set(pos.x, 1.5, pos.z);
+                parent.add(post);
+
+                const lantern = new THREE.PointLight(0xfbbf24, 0, 12);
+                lantern.position.set(pos.x, 3, pos.z);
+                parent.add(lantern);
+                lanternLights.push(lantern);
+            });
+        }
+
+        function setupFireflies() {
+            const count = 40;
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(count * 3);
+
+            for (let i = 0; i < count * 3; i += 3) {
+                pos[i] = (Math.random() - 0.5) * 30;
+                pos[i + 1] = Math.random() * 6 + 1;
+                pos[i + 2] = (Math.random() - 0.5) * 30;
+            }
+
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const mat = new THREE.PointsMaterial({
+                color: 0xfacc15,
+                size: 0.35,
+                transparent: true,
+                opacity: 0
+            });
+
+            firefliesSystem = new THREE.Points(geo, mat);
+            scene.add(firefliesSystem);
+        }
+
+        function onPointerDown(event) {
+            // Prevent clicking 3D world when modal is open
+            if (isAnyModalOpen()) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            if (intersects.length > 0) {
+                let obj = intersects[0].object;
+                while (obj.parent && obj.parent !== scene && !obj.userData.type && obj.userData.state === undefined) {
+                    obj = obj.parent;
+                }
+
+                // 1. Plot Click
+                if (obj.userData && obj.userData.state !== undefined) {
+                    handlePlotClick(obj, event.clientX, event.clientY);
+                }
+                // 2. Animal / Pet Click
+                else if (obj.userData && obj.userData.type) {
+                    handleAnimalClick(obj, event.clientX, event.clientY);
+                }
+            }
+        }
+
+        function handlePlotClick(plot, cx, cy) {
+            const data = plot.userData;
+
+            // Water Can Tool
+            if (state.currentTool === 'water') {
+                if (data.state === 'growing' && !data.isWatered) {
+                    data.isWatered = true;
+                    playSound('water');
+                    showFloatingText('💦 รดน้ำแล้ว! (โตไว x2)', cx, cy, '#38bdf8');
+                } else if (data.state === 'empty') {
+                    showFloatingText('ยังไม่มีพืชในแปลง!', cx, cy, '#cbd5e1');
+                }
+                return;
+            }
+
+            // Plant Seeds
+            if (data.state === 'empty') {
+                const seed = state.currentTool;
+                if (ITEMS[seed]) {
+                    data.state = 'growing';
+                    data.cropType = seed;
+                    data.growth = 0;
+                    data.isWatered = false;
+
+                    renderCropVisual(plot);
+                    playSound('plant');
+                    showFloatingText(`ปลูก ${ITEMS[seed].name}! ${ITEMS[seed].icon}`, cx, cy, '#22c55e');
+                } else {
+                    showFloatingText('เลือกเมล็ดพันธุ์ก่อน!', cx, cy, '#f59e0b');
+                }
+            } 
+            // Harvest Crop
+            else if (data.state === 'ready') {
+                const crop = data.cropType;
+                state.inventory[crop] = (state.inventory[crop] || 0) + 2;
+                addExp(18);
+                addCoins(ITEMS[crop].price);
+
+                data.state = 'empty';
+                data.cropType = null;
+                data.growth = 0;
+                data.isWatered = false;
+
+                while (data.cropHolder.children.length > 0) {
+                    data.cropHolder.remove(data.cropHolder.children[0]);
+                }
+
+                playSound('harvest');
+                showFloatingText(`+2 ${ITEMS[crop].name} ${ITEMS[crop].icon}`, cx, cy, '#f59e0b');
+                updateUI();
+            } 
+            else if (data.state === 'growing') {
+                showFloatingText('กำลังเจริญเติบโต... 🌱', cx, cy, '#10b981');
+            }
+        }
+
+        function handleAnimalClick(animal, cx, cy) {
+            const type = animal.userData.type;
+
+            if (type === 'dog') {
+                playSound('dog');
+                showFloatingText('❤️ โฮ่งๆ! (รักเจ้าของ +10)', cx, cy, '#ef4444');
+                addExp(8);
+                animal.position.y = 0.6;
+                setTimeout(() => animal.position.y = 0, 250);
+            } else {
+                if (state.currentTool === 'feed') {
+                    if (state.inventory.wheat > 0) {
+                        state.inventory.wheat--;
+                        playSound('animal');
+
+                        let yieldItem = 'egg';
+                        if (type === 'cow') yieldItem = 'milk';
+                        if (type === 'sheep') yieldItem = 'wool';
+
+                        state.inventory[yieldItem] = (state.inventory[yieldItem] || 0) + 1;
+                        addExp(22);
+                        showFloatingText(`+1 ${ITEMS[yieldItem].name} ${ITEMS[yieldItem].icon}`, cx, cy, '#a855f7');
+                        updateUI();
+                    } else {
+                        showFloatingText('ต้องการข้าวสาลี 🌾 ทำอาหาร!', cx, cy, '#f43f5e');
+                    }
+                } else {
+                    showFloatingText('เลือก "ให้อาหาร" เพื่อรับผลผลิต!', cx, cy, '#3b82f6');
+                }
+            }
+        }
+
+        function renderCropVisual(plot) {
+            const holder = plot.userData.cropHolder;
+            while (holder.children.length > 0) holder.remove(holder.children[0]);
+
+            const type = plot.userData.cropType;
+            const growth = plot.userData.growth;
+
+            let color = 0x22c55e;
+            if (type === 'carrot') color = 0xf97316;
+            if (type === 'tomato') color = 0xef4444;
+            if (type === 'corn') color = 0xeab308;
+            if (type === 'wheat') color = 0xfacc15;
+            if (type === 'strawberry') color = 0xf43f5e;
+            if (type === 'pumpkin') color = 0xea580c;
+
+            const geo = new THREE.SphereGeometry(0.45 * Math.max(0.2, growth), 8, 8);
+            const mat = new THREE.MeshLambertMaterial({ color: color });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.y = 0.4;
+            mesh.castShadow = true;
+            holder.add(mesh);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // 1. Windmill Rotation
+            if (windmillBlades) {
+                windmillBlades.rotation.z += delta * 1.5;
+            }
+
+            // 2. Duck Swimming Motion
+            if (duckMesh) {
+                duckMesh.position.x = Math.sin(time * 0.8) * 0.8;
+                duckMesh.position.z = Math.cos(time * 0.8) * 0.8;
+                duckMesh.rotation.y = time * 0.8;
+            }
+
+            // 3. Crops Growth Progress
+            plotMeshes.forEach(plot => {
+                if (plot.userData.state === 'growing') {
+                    const speedMultiplier = plot.userData.isWatered ? 2.0 : 1.0;
+                    plot.userData.growth += delta * 0.2 * speedMultiplier;
+
+                    renderCropVisual(plot);
+                    if (plot.userData.growth >= 1) {
+                        plot.userData.state = 'ready';
+                        plot.userData.growth = 1;
+                        renderCropVisual(plot);
+                    }
+                }
+            });
+
+            // 4. Fireflies floating
+            if (firefliesSystem && state.timeOfDay === 'night') {
+                firefliesSystem.rotation.y = time * 0.05;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function addCoins(amount) {
+            state.coins += amount;
+            playSound('coin');
+            updateUI();
+        }
+
+        function addExp(amount) {
+            state.exp += amount;
+            if (state.exp >= state.maxExp) {
+                state.level++;
+                state.exp -= state.maxExp;
+                state.maxExp = Math.floor(state.maxExp * 1.35);
+
+                // Confetti Fanfare
+                try {
+                    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                } catch(e){}
+
+                showFloatingText(`🎉 LEVEL UP! เลเวล ${state.level}`, window.innerWidth/2, 120, '#f59e0b');
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('coin-count').innerText = state.coins;
+            document.getElementById('level-num').innerText = state.level;
+            document.getElementById('exp-bar').style.width = `${(state.exp / state.maxExp) * 100}%`;
+            document.getElementById('order-badge').innerText = state.orders.length;
+
+            // Calculate total barn inventory count
+            let totalItems = 0;
+            for (let qty of Object.values(state.inventory)) totalItems += qty;
+            document.getElementById('barn-badge').innerText = totalItems;
+
+            renderOrders();
+            renderBarn();
+            renderKitchen();
+        }
+
+        function toggleTimeOfDay() {
+            if (state.timeOfDay === 'day') {
+                state.timeOfDay = 'sunset';
+                skyBgColor.setHex(0xf97316);
+                sunLight.color.setHex(0xfdba74);
+                sunLight.intensity = 0.8;
+                ambientLight.intensity = 0.5;
+                document.getElementById('btn-time').innerText = '🌅';
+                lanternLights.forEach(l => l.intensity = 0.5);
+                if(firefliesSystem) firefliesSystem.material.opacity = 0.2;
+            } else if (state.timeOfDay === 'sunset') {
+                state.timeOfDay = 'night';
+                skyBgColor.setHex(0x0f172a);
+                sunLight.color.setHex(0x38bdf8);
+                sunLight.intensity = 0.25;
+                ambientLight.intensity = 0.25;
+                document.getElementById('btn-time').innerText = '🌙';
+                lanternLights.forEach(l => l.intensity = 1.8);
+                if(firefliesSystem) firefliesSystem.material.opacity = 0.9;
+            } else {
+                state.timeOfDay = 'day';
+                skyBgColor.setHex(0x7dd3fc);
+                sunLight.color.setHex(0xfff5ea);
+                sunLight.intensity = 1.1;
+                ambientLight.intensity = 0.75;
+                document.getElementById('btn-time').innerText = '☀️';
+                lanternLights.forEach(l => l.intensity = 0);
+                if(firefliesSystem) firefliesSystem.material.opacity = 0;
+            }
+            scene.background = skyBgColor;
+            scene.fog.color = skyBgColor;
+        }
+
+        function showFloatingText(text, x, y, color = '#facc15') {
+            const el = document.createElement('div');
+            el.className = 'float-text';
+            el.innerText = text;
+            el.style.color = color;
+            el.style.left = `${x - 50}px`;
+            el.style.top = `${y - 20}px`;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1300);
+        }
+
+        function renderOrders() {
+            const container = document.getElementById('order-list');
+            container.innerHTML = '';
+
+            state.orders.forEach(order => {
+                let canFulfill = true;
+                let itemsHtml = '';
+
+                for (let [itemKey, qty] of Object.entries(order.items)) {
+                    const item = ITEMS[itemKey];
+                    const has = state.inventory[itemKey] || 0;
+                    if (has < qty) canFulfill = false;
+                    itemsHtml += `<span class="text-xs ${has >= qty ? 'text-emerald-600 font-bold' : 'text-rose-500 font-bold'}">${item.icon} ${has}/${qty}</span> `;
+                }
+
+                const card = document.createElement('div');
+                card.className = 'bg-white/90 p-3.5 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center';
+                card.innerHTML = `
+                    <div>
+                        <div class="text-sm font-black text-slate-800">คำสั่งซื้อ #${order.id}</div>
+                        <div class="flex gap-2 mt-1">${itemsHtml}</div>
+                        <div class="text-xs text-amber-600 font-bold mt-1">รางวัล: +${order.rewardCoins}🪙 +${order.rewardExp}⭐</div>
+                    </div>
+                    <button onclick="fulfillOrder(${order.id})" class="px-3.5 py-2 rounded-xl text-xs font-black text-white shadow ${canFulfill ? 'bg-emerald-500 hover:bg-emerald-600 btn-bounce' : 'bg-slate-300 cursor-not-allowed'}" ${!canFulfill ? 'disabled' : ''}>
+                        ส่งสินค้า 🚚
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        window.fulfillOrder = function(orderId) {
+            const idx = state.orders.findIndex(o => o.id === orderId);
+            if (idx !== -1) {
+                const order = state.orders[idx];
+                for (let [item, qty] of Object.entries(order.items)) {
+                    state.inventory[item] -= qty;
+                }
+                addCoins(order.rewardCoins);
+                addExp(order.rewardExp);
+                state.orders.splice(idx, 1);
+
+                setTimeout(() => {
+                    state.orders.push({
+                        id: Math.floor(Math.random() * 899 + 100),
+                        items: { carrot: Math.floor(Math.random()*2+1), egg: 1 },
+                        rewardCoins: 140,
+                        rewardExp: 50
+                    });
+                    updateUI();
+                }, 4000);
+
+                updateUI();
+            }
+        };
+
+        function renderBarn() {
+            const container = document.getElementById('barn-items-grid');
+            container.innerHTML = '';
+
+            for (let [key, item] of Object.entries(ITEMS)) {
+                const count = state.inventory[key] || 0;
+                const card = document.createElement('div');
+                card.className = 'bg-white/90 p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-between';
+                card.innerHTML = `
+                    <span class="text-3xl">${item.icon}</span>
+                    <span class="text-xs font-bold text-slate-700 mt-1">${item.name}</span>
+                    <span class="text-sm font-black text-emerald-600">x${count}</span>
+                    <button onclick="sellItem('${key}')" class="mt-2 w-full py-1 bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-extrabold rounded-xl btn-bounce ${count <= 0 ? 'opacity-40 cursor-not-allowed' : ''}" ${count <= 0 ? 'disabled' : ''}>
+                        ขาย (${item.price}🪙)
+                    </button>
+                `;
+                container.appendChild(card);
+            }
+        }
+
+        window.sellItem = function(key) {
+            if (state.inventory[key] > 0) {
+                state.inventory[key]--;
+                addCoins(ITEMS[key].price);
+                updateUI();
+            }
+        };
+
+        function renderKitchen() {
+            const container = document.getElementById('recipe-list');
+            container.innerHTML = '';
+
+            RECIPES.forEach(recipe => {
+                let canCook = true;
+                let ingHtml = '';
+
+                for (let [itemKey, qty] of Object.entries(recipe.ingredients)) {
+                    const item = ITEMS[itemKey];
+                    const has = state.inventory[itemKey] || 0;
+                    if (has < qty) canCook = false;
+                    ingHtml += `<span class="text-xs ${has >= qty ? 'text-emerald-600 font-bold' : 'text-rose-500 font-bold'}">${item.icon} ${has}/${qty}</span> `;
+                }
+
+                const card = document.createElement('div');
+                card.className = 'bg-white/90 p-3.5 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center';
+                card.innerHTML = `
+                    <div>
+                        <div class="text-sm font-black text-slate-800">${recipe.name}</div>
+                        <div class="flex gap-2 mt-1">${ingHtml}</div>
+                    </div>
+                    <button onclick="cookRecipe('${recipe.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black text-white shadow ${canCook ? 'bg-orange-500 hover:bg-orange-600 btn-bounce' : 'bg-slate-300 cursor-not-allowed'}" ${!canCook ? 'disabled' : ''}>
+                        ทำอาหาร 🍳
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        window.cookRecipe = function(recipeId) {
+            const recipe = RECIPES.find(r => r.id === recipeId);
+            if (recipe) {
+                for (let [item, qty] of Object.entries(recipe.ingredients)) {
+                    state.inventory[item] -= qty;
+                }
+                state.inventory[recipe.output] = (state.inventory[recipe.output] || 0) + recipe.count;
+                addExp(recipe.xp);
+                playSound('cook');
+                updateUI();
+            }
+        };
+
+        function isAnyModalOpen() {
+            return !document.getElementById('order-modal').classList.contains('hidden') ||
+                   !document.getElementById('barn-modal').classList.contains('hidden') ||
+                   !document.getElementById('kitchen-modal').classList.contains('hidden');
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.addEventListener('load', () => {
+            initAudio();
+            initEngine();
+            updateUI();
+            animate();
+
+            // Tool selection bindings
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.tool-btn').forEach(b => {
+                        b.classList.remove('bg-amber-100', 'border-amber-400');
+                        b.classList.add('bg-slate-100', 'border-transparent');
+                    });
+                    const target = e.currentTarget;
+                    target.classList.remove('bg-slate-100', 'border-transparent');
+                    target.classList.add('bg-amber-100', 'border-amber-400');
+
+                    state.currentTool = target.dataset.tool;
+                    const name = ITEMS[state.currentTool] ? `${ITEMS[state.currentTool].name} ${ITEMS[state.currentTool].icon}` : (state.currentTool === 'water' ? 'บัวรดน้ำ 💦' : 'เครื่องมือ');
+                    document.getElementById('current-tool-text').innerText = name;
+                });
+            });
+
+            // Navigation Buttons
+            document.getElementById('btn-time').addEventListener('click', toggleTimeOfDay);
+            
+            document.getElementById('btn-audio').addEventListener('click', () => {
+                state.audioMuted = !state.audioMuted;
+                document.getElementById('btn-audio').innerText = state.audioMuted ? '🔇' : '🔊';
+            });
+
+            document.getElementById('btn-orders').addEventListener('click', () => document.getElementById('order-modal').classList.remove('hidden'));
+            document.getElementById('close-orders').addEventListener('click', () => document.getElementById('order-modal').classList.add('hidden'));
+
+            document.getElementById('btn-barn').addEventListener('click', () => document.getElementById('barn-modal').classList.remove('hidden'));
+            document.getElementById('close-barn').addEventListener('click', () => document.getElementById('barn-modal').classList.add('hidden'));
+
+            document.getElementById('btn-kitchen').addEventListener('click', () => document.getElementById('kitchen-modal').classList.remove('hidden'));
+            document.getElementById('close-kitchen').addEventListener('click', () => document.getElementById('kitchen-modal').classList.add('hidden'));
+        });
+    </script>
+</body>
+</html>
